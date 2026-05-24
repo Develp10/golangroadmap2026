@@ -325,3 +325,151 @@ Made with ☕ and ❤️ для Go-сообщества
 **Практика:** пройди 5–10 mock-интервью (pramp, друзья-разработчики); запиши свои ответы на видео и пересмотри.
 
 ---
+
+## 🚀 Продвинутые этапы (Senior+ / Staff-level)
+
+После Этапа 12 ты уже готов к собесам на Middle/Senior. Дальнейшие этапы — для тех, кто хочет расти в сторону Staff/Principal, идти в Open Source, в распределённые системы или строить инфраструктурные продукты. Не обязательны для трудоустройства, но именно они отделяют «крепкого сеньора» от инженера, который проектирует системы за миллионы запросов в секунду.
+
+---
+
+### Этап 13. Безопасность Go-приложений (3–4 недели) 🔴
+
+**Зачем этап:** в проде security-баги стоят дороже всех остальных. Любой Senior должен уметь читать код через призму «как это сломают».
+
+**Что учим:**
+- OWASP Top 10 применительно к Go-веб-сервисам: SQL-инъекции, SSRF, XSS, CSRF, IDOR, deserialization.
+- - Безопасная работа с криптографией: `crypto/*`, что использовать, чего избегать (никогда не пиши свой AES).
+  - - Хеширование паролей: `bcrypt`, `argon2id`, почему нельзя SHA-256.
+    - - TLS: настройка сервера, mTLS между сервисами, ротация сертификатов, Let's Encrypt через `autocert`.
+      - - JWT — глубоко: алгоритмы (RS256 vs HS256), атаки `alg=none`, key confusion, JWE.
+        - - Secrets management: Vault, AWS Secrets Manager, SOPS, как НЕ хранить секреты в git.
+          - - Supply chain security: `go mod verify`, `govulncheck`, проверка зависимостей, SBOM.
+            - - Статический анализ: `gosec`, `staticcheck`, `semgrep`-правила для Go.
+              - - Rate limiting и защита от DDoS на уровне приложения.
+                - - Container security: distroless-образы, non-root user, read-only filesystem, seccomp-профили.
+                 
+                  - **Проект:** возьми сервис из Этапа 6 и проведи полный security audit: запусти `govulncheck`, `gosec`, добавь rate limiter, перепиши аутентификацию на argon2id + refresh tokens, опиши threat model в `SECURITY.md`.
+                 
+                  - **Самопроверка:** объясни, почему `time.Now().Unix()` плохой источник случайности для токенов; покажи timing attack на сравнение HMAC и как от неё защищает `hmac.Equal`; нарисуй цепочку доверия TLS.
+                 
+                  - ---
+
+                  ### Этап 14. Облачные технологии и Cloud-Native Go (4–5 недель) 🟠
+
+                  **Зачем этап:** 80% Go-вакансий — это сервисы в облаке. Уметь нативно работать с AWS/GCP — must-have для Senior.
+
+                  **Что учим:**
+                  - AWS SDK for Go v2: S3, DynamoDB, SQS, SNS, Lambda, Secrets Manager.
+                  - - GCP / Yandex Cloud SDK — базово, на уровне «прочитал доку и сделал».
+                    - - Serverless на Go: AWS Lambda, Cloud Functions, холодный старт, тюнинг бинарника (`-ldflags="-s -w"`, UPX).
+                      - - Infrastructure as Code: Terraform — как читать модули, писать ресурсы под свои сервисы, state management.
+                        - - Pulumi — IaC прямо на Go (бонусом).
+                          - - Service mesh: Istio/Linkerd на уровне «понимаю, что даёт, и могу настроить базовый сценарий».
+                            - - Object storage паттерны: presigned URLs, мультипарт-загрузки, lifecycle policies.
+                              - - Event-driven архитектура в облаке: SQS+Lambda, EventBridge, Pub/Sub.
+                                - - Cost optimization: где утекают деньги в AWS, как мониторить через CloudWatch + Go-метрики.
+                                 
+                                  - **Проект:** разверни маркетплейс из Этапа 8 в AWS через Terraform: ECS Fargate для сервисов, RDS для БД, ElastiCache Redis, S3 для медиа, SQS для асинхронной обработки заказов, ALB + ACM для HTTPS. Опиши инфраструктуру одной командой `terraform apply`.
+                                 
+                                  - **Самопроверка:** объясни разницу между SQS Standard и FIFO; покажи, как идемпотентно обработать сообщение из очереди; рассчитай стоимость своего сервиса при 1M RPS в месяц.
+                                 
+                                  - ---
+
+                                  ### Этап 15. Глубокий runtime и низкий уровень (5–6 недель) 🔴
+
+                                  **Зачем этап:** уровень Staff-инженера и контрибьютора в стандартную библиотеку. Без этого ты пользователь Go, с этим — инженер, который понимает Go насквозь.
+
+                                  **Что учим:**
+                                  - Исходники runtime: `runtime/proc.go`, `runtime/mgc.go`, `runtime/chan.go` — читать и понимать.
+                                  - - GMP-планировщик глубоко: work stealing, sysmon, preemption (signal-based с 1.14), goroutine parking.
+                                    - - Garbage Collector: tri-color mark&sweep, write barriers, как GC влияет на хвост латенси, GOGC vs GOMEMLIMIT в проде.
+                                      - - Memory model Go: happens-before, atomics, `sync/atomic.Value`, барьеры памяти.
+                                        - - Go assembly (Plan 9 dialect): как читать, когда писать (горячие хот-пути, SIMD через ассемблер).
+                                          - - `unsafe`: легальные кейсы, `unsafe.Pointer` правила, `reflect.SliceHeader` (устарел, но знать).
+                                            - - cgo: как работает, цена вызова (~200ns), когда стоит, когда нет.
+                                              - - Linker и build tags: cross-compile, статическая сборка, `CGO_ENABLED=0`, `-trimpath`.
+                                                - - PGO (Profile-Guided Optimization, Go 1.21+) — реальный буст 5–15% на хот-путях.
+                                                  - - WebAssembly: компиляция Go в wasm, TinyGo для embedded.
+                                                   
+                                                    - **Проект:** напиши кастомный `sync.Pool`-подобный объектный пул с lock-free fast path через `atomic`; сравни бенчмарками со стандартным; опиши escape analysis и аллокации в README. Бонус: реализуй one hot-path функцию на Plan 9 assembly и покажи ускорение.
+                                                   
+                                                    - **Самопроверка:** объясни, почему `for range channel` корректно завершается на `close`; нарисуй жизненный цикл горутины в планировщике; покажи на коде, как происходит escape переменной в кучу и как этого избежать.
+                                                   
+                                                    - ---
+
+                                                    ### Этап 16. Распределённые системы (6–8 недель) 🔴
+
+                                                    **Зачем этап:** именно здесь рождаются Staff/Principal. Любая большая система — распределённая, и Go — её любимый язык.
+
+                                                    **Что учим:**
+                                                    - CAP, PACELC, теорема FLP — на уровне «могу объяснить на собесе и применить в дизайне».
+                                                    - - Consensus-алгоритмы: Paxos (на уровне идеи), Raft (глубоко), реализации `hashicorp/raft`, `etcd/raft`.
+                                                      - - Распределённые транзакции: 2PC, 3PC, Saga (orchestration vs choreography), Outbox + CDC.
+                                                        - - Eventual consistency и CRDT: G-Counter, OR-Set, LWW-Register, библиотека `automerge-go`.
+                                                          - - Vector clocks, Lamport timestamps, гибридные логические часы (HLC).
+                                                            - - Sharding и партиционирование: hash, range, consistent hashing (`hashicorp/memberlist`).
+                                                              - - Репликация: leader-follower, multi-leader, leaderless (Dynamo-style), quorum reads/writes.
+                                                                - - Распределённые блокировки: Redlock (и почему его критикуют), etcd, ZooKeeper.
+                                                                  - - Gossip-протоколы (SWIM, HashiCorp Serf).
+                                                                    - - Книги: «Designing Data-Intensive Applications» (Kleppmann) — прочитать целиком, обязательно.
+                                                                     
+                                                                      - **Проект:** реализуй упрощённый distributed key-value store на Raft (через `hashicorp/raft`): 3 ноды, leader election, репликация, snapshot, HTTP API для get/put/delete. Прогон через Jepsen-подобный тест на network partitions.
+                                                                     
+                                                                      - **Самопроверка:** объясни, почему «exactly-once delivery» — это миф, а «exactly-once processing» — реальность; нарисуй split-brain и как от него защищает кворум; покажи, как Saga компенсирует частичный отказ.
+                                                                     
+                                                                      - ---
+
+                                                                      ### Этап 17. Streaming, Big Data и высоконагруженные пайплайны (4–6 недель) 🟠
+
+                                                                      **Зачем этап:** Go активно используется в data engineering и стриминге — InfluxDB, Prometheus, TimescaleDB, Benthos, ClickHouse-tools написаны на Go.
+
+                                                                      **Что учим:**
+                                                                      - Kafka глубоко: партиции, consumer groups, exactly-once semantics, transactions, `franz-go` и `segmentio/kafka-go`.
+                                                                      - - Kafka Streams-подобные пайплайны на Go: `benthos`/`bento`, собственные stream processors.
+                                                                        - - ClickHouse: запись больших объёмов, batching, асинхронные вставки, `clickhouse-go` v2.
+                                                                          - - Time-series данные: TSDB-внутренности, downsampling, retention.
+                                                                            - - Колоночные форматы: Parquet, Arrow на Go (`apache/arrow`).
+                                                                              - - ETL/ELT пайплайны: idempotency, backfill, replay, exactly-once на чек-поинтах.
+                                                                                - - Backpressure-паттерны: bounded buffers, dropping, sampling.
+                                                                                  - - NATS JetStream как альтернатива Kafka для Go-native пайплайнов.
+                                                                                    - - CDC: Debezium → Kafka → Go consumer, паттерн Outbox.
+                                                                                     
+                                                                                      - **Проект:** построй real-time аналитический пайплайн: генератор событий → Kafka → Go-consumer с агрегацией в окнах (tumbling/sliding) → ClickHouse → Grafana-дашборд. Нагрузить 100k events/sec и измерить latency p50/p95/p99.
+                                                                                     
+                                                                                      - **Самопроверка:** объясни разницу between at-least-once, at-most-once и exactly-once; покажи, как ребалансировка consumer group ломает обработку и как с этим жить; нарисуй idempotent consumer.
+                                                                                     
+                                                                                      - ---
+
+                                                                                      ### Этап 18. Open Source, менторство и инженерный бренд (бессрочно) 🟣
+
+                                                                                      **Зачем этап:** Senior — это не только код. Это влияние, передача знаний и репутация. Этот этап делается параллельно остальным, начиная с Middle.
+
+                                                                                      **Что учим и делаем:**
+                                                                                      - Контрибьют в Go-проекты: начни с `good first issue` в `prometheus/prometheus`, `grafana/grafana`, `hashicorp/*`, `kubernetes/kubernetes` (контроллеры на Go).
+                                                                                      - - Контрибьют в сам Go: процесс `golang.org/cl`, Gerrit, code review культура Go-команды.
+                                                                                        - - Веди свой pet-проект как продукт: README, CONTRIBUTING.md, CI, релизы с semver, CHANGELOG, issue templates, GitHub Discussions.
+                                                                                          - - Технические статьи: разбор сложной темы раз в месяц — Habr, Medium, dev.to, личный блог.
+                                                                                            - - Публичные выступления: митапы (GoWay, GolangPiter, GopherCon), внутренние tech-talks.
+                                                                                              - - Менторство: бери 1–2 джунов, делай code review их pet-проектов, отвечай в чатах сообщества.
+                                                                                                - - Чтение чужого кода как практика: раз в неделю разбирай один популярный Go-репозиторий и пиши заметки.
+                                                                                                  - - Книги и блоги уровня Senior+: Dave Cheney, Russ Cox, Bryan Mills, Bill Kennedy (ardanlabs).
+                                                                                                    - - Английский на уровне «читаю RFC, пишу PR-описания, выступаю на англоязычных митапах».
+                                                                                                     
+                                                                                                      - **Практика:** замёрджь минимум 3 нетривиальных PR в публичные Go-проекты; собери 100+ звёзд на одном из своих репозиториев; проведи хотя бы один публичный доклад или внутренний tech-talk; стань ментором для 1 джуна и доведи его до первой работы.
+                                                                                                     
+                                                                                                      - **Самопроверка:** твой GitHub-профиль рассказывает о тебе больше, чем резюме; коллеги пингуют тебя за архитектурным советом; ты можешь объяснить любую тему из этапов 0–17 другому инженеру за 15 минут на whiteboard.
+                                                                                                     
+                                                                                                      - ---
+                                                                                                      
+                                                                                                      ## 🎯 Финальная карта роста
+                                                                                                      
+                                                                                                      | Грейд | Этапы | Срок суммарно | Что умеешь |
+                                                                                                      |-------|-------|---------------|------------|
+                                                                                                      | 🟢 Junior | 0–4 | 4–6 мес | CRUD API, простые горутины, базовая работа с БД |
+                                                                                                      | 🟡 Middle | 5–9 | +6–8 мес | Микросервисы, тесты, Docker/k8s, понимание архитектуры |
+                                                                                                      | 🔴 Senior | 10–12 | +6–12 мес | Проектирование систем, performance, ментор для джунов |
+                                                                                                      | 🟣 Staff / Principal | 13–18 | +1–2 года | Безопасность, облако, runtime, distributed systems, влияние в сообществе |
+                                                                                                      
+                                                                                                      Не пытайся пройти всё подряд — после Этапа 12 выбирай 1–2 продвинутых направления под свой контекст работы. Backend-инженеру в финтехе важнее этапы 13 и 16, инженеру в data-платформе — 17, разработчику инфраструктурных тулзов — 15.
+
+---
