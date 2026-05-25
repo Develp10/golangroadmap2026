@@ -1,3 +1,192 @@
+# 🟢 Модуль 0. Фундамент
+
+> **Срок:** 2–3 недели  
+> **Уровень:** 🟢 Начинающий  
+> **Цель модуля:** заложить фундамент, без которого Go превратится в копипасту. После модуля ты уверенно работаешь с CLI, git, понимаешь, как работает компьютер и сеть на базовом уровне, и пишешь первые программы на Go.
+
+---
+
+## 🗺️ Карта модуля
+
+1. Установка Go и tooling
+2. Командная строка и Unix-философия
+3. Git и GitHub на практике
+4. Как работает компьютер (CPU, RAM, диск, ОС)
+5. Как работает сеть (TCP/IP, HTTP, DNS)
+6. Первые программы на Go и Go modules
+7. IDE, отладка, форматирование
+
+---
+
+## Урок 0.1. Установка Go и окружения
+
+- 🎯 **Цель:** установить Go, настроить `GOPATH`/`GOROOT`/`GOBIN`, разобраться с `go env`, понять файловую структуру проекта.
+- 📚 **Теория:**
+  - [Download and install Go](https://go.dev/doc/install)
+  - [How to Write Go Code](https://go.dev/doc/code)
+  - Видео Just for Func — "Go Modules" (Francesc Campoy)
+- 💻 **Практика:**
+  - Установить Go последней версии (1.23+).
+  - Прогнать `go env`, выписать значения GOPATH, GOROOT, GOMODCACHE.
+  - Создать структуру `~/dev/go/<projects>` и понять, чем она отличается от старого GOPATH-workflow.
+  - Установить `goimports`, `golangci-lint`, `delve`.
+- ✅ **Чек:**
+  - Что выведет `go version`?
+  - Зачем нужен `GOBIN`?
+  - Где Go хранит загруженные модули?
+- ⚠️ **Красный флаг:** установка через `apt install golang` без проверки версии — попадёшь на старую.
+
+## Урок 0.2. Командная строка как родная среда
+
+- 🎯 **Цель:** свободно работать в терминале: навигация, файлы, процессы, perm'ы, pipes, базовый bash/zsh.
+- 📚 **Теория:**
+  - [The Missing Semester of Your CS Education (MIT)](https://missing.csail.mit.edu/) — золотой стандарт, 6 первых лекций.
+  - Книга "The Linux Command Line" (William Shotts) — бесплатна на linuxcommand.org.
+  - Шпаргалки tldr.sh.
+- 💻 **Практика:**
+  - Решить 20 задач на cmdchallenge.com.
+  - Написать bash-скрипт, который проходит по папке и считает строки во всех `.go` файлах.
+  - Изучить `grep`, `sed`, `awk`, `xargs`, `find` на 5 примерах каждый.
+  - Освоить `tmux` или `screen` (минимум: сессии, окна, панели).
+- ✅ **Чек:**
+  - Что делает `ps aux | grep go | awk '{print $2}' | xargs kill`?
+  - Чем `>` отличается от `>>` и `2>&1`?
+  - Как найти 10 самых больших файлов в директории?
+- ⚠️ **Красный флаг:** работать только через GUI/IDE, потому что «терминал страшный».
+
+## Урок 0.3. Git и GitHub
+
+- 🎯 **Цель:** не просто `add/commit/push`, а понимание объектной модели, веток, ребейза, конфликтов.
+- 📚 **Теория:**
+  - Книга [Pro Git](https://git-scm.com/book/ru/v2) — бесплатна, на русском.
+  - Интерактив [Learn Git Branching](https://learngitbranching.js.org/?locale=ru_RU) — пройти все уровни.
+  - GitHub Docs: pull requests, code review.
+- 💻 **Практика:**
+  - Создать репозиторий, сделать ветку, PR в свой же main.
+  - Сломать историю через `rebase -i`, починить.
+  - Разрешить merge-конфликт руками (без GUI).
+  - Настроить SSH-ключи и подпись коммитов GPG/sigstore.
+  - Сделать форк чужого open-source репо, отправить осмысленный PR (хоть в README).
+- ✅ **Чек:**
+  - Что такое HEAD, и что значит «detached HEAD»?
+  - Разница `git pull` и `git pull --rebase`?
+  - Что делает `git reset --soft`, `--mixed`, `--hard`?
+  - Когда `git rebase` опасен?
+- ⚠️ **Красный флаг:** `git push --force` в общую ветку без `--force-with-lease`. Использование Git как «облака для бэкапа» без понимания истории.
+
+## Урок 0.4. Как устроен компьютер
+
+- 🎯 **Цель:** базовая mental model железа и ОС: CPU, кэши, RAM, диск, syscalls, процессы, потоки.
+- 📚 **Теория:**
+  - Книга "Computer Systems: A Programmer's Perspective" (Bryant & O'Hallaron) — главы 1, 6, 9 для начала.
+  - Видео "Crash Course Computer Science" (YouTube, PBS) — 10 первых эпизодов.
+  - Статья [Latency Numbers Every Programmer Should Know](https://gist.github.com/jboner/2841832).
+- 💻 **Практика:**
+  - Запустить `htop`, `top`, `vmstat`, `iostat` — понять, что они показывают.
+  - Написать сравнительный отчёт: latency L1 cache vs RAM vs SSD vs сетевой round-trip.
+  - Прочитать про процессы и потоки в Linux, понять разницу.
+- ✅ **Чек:**
+  - Почему доступ к RAM в 100 раз медленнее L1?
+  - Что такое context switch и почему он «дорогой»?
+  - Чем процесс отличается от потока, а поток — от горутины?
+- ⚠️ **Красный флаг:** считать, что «железо — это не моё дело».
+
+## Урок 0.5. Как работает сеть
+
+- 🎯 **Цель:** mental model сети: OSI/TCP-IP, TCP vs UDP, DNS, HTTP/1.1/2/3, TLS на пальцах.
+- 📚 **Теория:**
+  - Книга "Computer Networking: A Top-Down Approach" (Kurose & Ross) — первые 3 главы.
+  - Статьи на high-performance-browser-networking.com (Ilya Grigorik) — бесплатная книга про сеть.
+  - Видео "How DNS Works" (Cloudflare).
+- 💻 **Практика:**
+  - Поиграть с `curl -v`, `dig`, `nslookup`, `tcpdump`, `wireshark` на простом GET-запросе.
+  - Расшифровать TLS-handshake руками по логам wireshark.
+  - Запустить локальный nginx, посмотреть headers.
+- ✅ **Чек:**
+  - Что происходит при вводе `https://google.com` в браузере (полная цепочка)?
+  - Чем HTTP/2 принципиально лучше HTTP/1.1?
+  - Зачем нужен TLS SNI?
+- ⚠️ **Красный флаг:** не различать HTTP и TCP, не понимать, что такое порт.
+
+## Урок 0.6. Первая программа на Go
+
+- 🎯 **Цель:** написать первые программы, освоить `go mod`, понять структуру пакета.
+- 📚 **Теория:**
+  - [A Tour of Go](https://go.dev/tour/welcome/1) — пройти полностью.
+  - [Go by Example](https://gobyexample.com/) — пройти первые 30 примеров.
+  - Глава 1–2 книги "The Go Programming Language" (Donovan & Kernighan).
+- 💻 **Практика:**
+  - `hello world` через `go run` и `go build`.
+  - Калькулятор в командной строке (через `flag` или `os.Args`).
+  - Утилита `wc -l`-clone: считает строки в файле.
+  - Загрузчик HTML-страницы по URL (через `net/http`).
+  - Завести Go module, подключить внешний пакет (например, `github.com/fatih/color`).
+- ✅ **Чек:**
+  - Что делает `go mod tidy`?
+  - Чем отличается `package main` от обычного пакета?
+  - Что лежит в `go.sum` и зачем?
+- ⚠️ **Красный флаг:** копировать примеры, не понимая, что делает каждая строка.
+
+## Урок 0.7. IDE, отладка, формат
+
+- 🎯 **Цель:** настроить рабочее окружение: VS Code или GoLand, debugger, форматирование, линтеры.
+- 📚 **Теория:**
+  - VS Code Go extension docs.
+  - GoLand quick start.
+  - [Delve docs](https://github.com/go-delve/delve/tree/master/Documentation).
+- 💻 **Практика:**
+  - Установить VS Code + Go extension или GoLand (бесплатна для open-source/learning).
+  - Поставить breakpoint в учебной программе, пройтись step-over/step-into.
+  - Настроить format-on-save через `gofmt`/`goimports`.
+  - Подключить `golangci-lint` с базовым конфигом, починить найденные проблемы.
+- ✅ **Чек:**
+  - Чем `gofmt` отличается от `goimports`?
+  - Какие линтеры включены в golangci-lint по умолчанию?
+  - Как отладить программу, которая падает при старте?
+- ⚠️ **Красный флаг:** дебажить `fmt.Println`-ами вместо отладчика.
+
+---
+
+## 🎯 Проект модуля
+
+**CLI-утилита `gotodo` — менеджер задач в терминале.**
+
+Критерии приёмки:
+- Команды: `add`, `list`, `done`, `rm`, `clear`.
+- Хранение в JSON-файле в `~/.gotodo/tasks.json`.
+- Цветной вывод (через `fatih/color` или ANSI-коды).
+- Флаги: `--priority`, `--due`, `--filter`.
+- Свой репозиторий на GitHub с README, MIT-лицензией, минимум 5 осмысленных коммитов.
+- Установка через `go install`.
+- `golangci-lint` чист.
+
+---
+
+## 🏁 Чек-пойнт модуля
+
+- [ ] Установил Go и tooling, понимаю `go env`.
+- [ ] Свободно работаю в терминале, знаю grep/sed/awk/find.
+- [ ] Понимаю объектную модель Git, делал rebase и решал конфликты.
+- [ ] Знаю latency numbers, разницу процесс/поток/горутина.
+- [ ] Объясняю, что происходит при HTTP-запросе на уровне TCP/DNS/TLS.
+- [ ] Написал 5+ маленьких программ на Go.
+- [ ] Настроил IDE с debugger, формат и линтерами.
+- [ ] Опубликовал проект `gotodo` на GitHub.
+
+---
+
+## 📎 Дополнительные ресурсы
+
+- [The Missing Semester (MIT)](https://missing.csail.mit.edu/)
+- [Pro Git book (RU)](https://git-scm.com/book/ru/v2)
+- [A Tour of Go](https://go.dev/tour/)
+- [Go by Example](https://gobyexample.com/)
+- [Effective Go](https://go.dev/doc/effective_go) — прочитать до конца модуля 1.
+- YouTube канал [JustForFunc](https://www.youtube.com/c/JustForFunc) — Francesc Campoy.
+
+---
+
+[📚 К содержанию курса](../README.md) | [Модуль 1. Синтаксис и основы Go →](./01-syntax.md)
 # Модуль 0. Фундамент 🟢
 
 **Срок:** 2–3 недели  
