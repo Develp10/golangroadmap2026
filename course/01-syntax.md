@@ -1,3 +1,195 @@
+# 🟢 Модуль 1. Синтаксис и основы Go
+
+> **Срок:** 3–4 недели  
+> **Уровень:** 🟢 Начинающий  
+> **Цель модуля:** свободно владеть синтаксисом Go, понимать систему типов, писать идиоматичный код. После модуля ты не «пишешь Python на Go», а думаешь по-гошному.
+
+---
+
+## 🗺️ Карта модуля
+
+1. Типы данных и переменные
+2. Управляющие конструкции
+3. Функции и замыкания
+4. Структуры, методы, интерфейсы (база)
+5. Слайсы, массивы, карты (mental model)
+6. Указатели и value/pointer semantics
+7. Ошибки и обработка ошибок
+8. Пакеты и организация кода
+
+---
+
+## Урок 1.1. Типы данных, переменные, константы
+
+- 🎯 **Цель:** знать все встроенные типы, понимать zero value, неявные конверсии и почему их нет в Go.
+- 📚 **Теория:**
+  - [Go Spec — Types](https://go.dev/ref/spec#Types)
+  - [Effective Go — Names and Constants](https://go.dev/doc/effective_go#names)
+  - Книга TGPL (Donovan & Kernighan), глава 2–3.
+- 💻 **Практика:**
+  - Написать функции для всех numeric-преобразований и поймать overflow.
+  - Поэкспериментировать с `iota`, написать enum через `iota` с `Stringer`.
+  - Сравнить `string`, `[]byte`, `[]rune` на UTF-8 строке с эмодзи.
+- ✅ **Чек:**
+  - Сколько занимает в памяти `int` на amd64 и arm64?
+  - Что такое zero value, и какое оно у `time.Time`?
+  - Почему `int` ≠ `int32` даже на 32-битных платформах?
+- ⚠️ **Красный флаг:** использовать `interface{}` (или `any`) когда тип известен — потеря типобезопасности.
+
+## Урок 1.2. Управляющие конструкции
+
+- 🎯 **Цель:** уверенно владеть `if`, `for`, `switch`, `defer`, `goto` (и понимать, когда последний оправдан — почти никогда).
+- 📚 **Теория:**
+  - Go Spec — Statements.
+  - Статья Dave Cheney "Avoid else, return early".
+- 💻 **Практика:**
+  - Переписать вложенный `if-else` через early return.
+  - Реализовать `switch` с type assertion на `any`.
+  - Написать пример с `defer` в цикле — поймать утечку файловых дескрипторов.
+- ✅ **Чек:**
+  - В каком порядке выполняются несколько `defer`?
+  - Что такое labeled `break` и `continue`?
+  - Чем `switch` в Go отличается от C/Java (fallthrough)?
+- ⚠️ **Красный флаг:** `defer` внутри цикла без понимания накопления вызовов.
+
+## Урок 1.3. Функции, замыкания, variadic
+
+- 🎯 **Цель:** функции как first-class citizens, named return values, замыкания, variadic-параметры.
+- 📚 **Теория:**
+  - TGPL, глава 5.
+  - Статья "Functional Options Pattern" (Dave Cheney, Rob Pike).
+- 💻 **Практика:**
+  - Реализовать `map/filter/reduce` через дженерики (или без них для тренировки).
+  - Написать конструктор с functional options для условного `Server`.
+  - Замыкание-счётчик, замыкание-мемоизатор.
+- ✅ **Чек:**
+  - Что захватывает замыкание — копию или ссылку?
+  - Зачем named return values и когда они вредны?
+  - Что произойдёт при `defer recover()` в горутине, не вызванной из main?
+- ⚠️ **Красный флаг:** возвращать локальный `&x` и считать, что переменная «исчезнет» (escape analysis сам разберётся).
+
+## Урок 1.4. Структуры, методы, базовые интерфейсы
+
+- 🎯 **Цель:** объявлять структуры, методы с value/pointer receiver, базовые интерфейсы как контракты.
+- 📚 **Теория:**
+  - Effective Go — Interfaces, Methods.
+  - Статья Dave Cheney "Methods, interfaces, and embedded types".
+- 💻 **Практика:**
+  - Реализовать интерфейс `io.Writer` для своего типа (например, цветной writer).
+  - Написать структуру `Money` с методами `Add`, `Mul`, `String`.
+  - Использовать embedded struct для композиции.
+- ✅ **Чек:**
+  - Когда брать value receiver, когда pointer?
+  - Почему `*T` реализует интерфейс, а `T` — нет, и наоборот?
+  - Что такое method set?
+- ⚠️ **Красный флаг:** наследование через embedding ради «иерархии классов».
+
+## Урок 1.5. Слайсы, массивы, карты — mental model
+
+- 🎯 **Цель:** понимать internal-структуру слайса (ptr/len/cap), копирование, append, sharing memory, hashmap.
+- 📚 **Теория:**
+  - Статья [Go Slices: usage and internals](https://go.dev/blog/slices-intro).
+  - Статья [Slice Tricks](https://github.com/golang/go/wiki/SliceTricks).
+  - Видео JustForFunc — "Understanding Go Slices".
+- 💻 **Практика:**
+  - Написать функцию, которая удаляет элемент из слайса (несколько способов).
+  - Поймать «утечку» backing-array через sub-slice.
+  - Реализовать LRU-кэш на `map + container/list`.
+- ✅ **Чек:**
+  - Что происходит при `append`, когда `len == cap`?
+  - Почему два разных слайса могут шарить память?
+  - Почему итерация по map не упорядочена?
+- ⚠️ **Красный флаг:** считать, что `s2 := s1[2:5]` копирует данные.
+
+## Урок 1.6. Указатели и value/pointer semantics
+
+- 🎯 **Цель:** понимать, когда копировать, а когда брать указатель, осознанно выбирать семантику.
+- 📚 **Теория:**
+  - Bill Kennedy "Ardan Labs Ultimate Go" — module on semantics.
+  - Effective Go — Pointers vs Values.
+- 💻 **Практика:**
+  - Сравнить производительность value vs pointer receiver для большой структуры.
+  - Понять, почему `for _, v := range items` копирует элементы.
+  - Эксперимент: `*int` vs `int` в map'е.
+- ✅ **Чек:**
+  - Когда метод обязан иметь pointer receiver?
+  - Что такое value semantics в Go и почему она первичная?
+  - Чем `nil` указатель отличается от nil interface?
+- ⚠️ **Красный флаг:** «всегда брать указатель — экономлю память».
+
+## Урок 1.7. Ошибки: error как значение
+
+- 🎯 **Цель:** работать с ошибками идиоматично: sentinel errors, error wrapping, `errors.Is/As`, кастомные типы.
+- 📚 **Теория:**
+  - [Go blog — Working with Errors](https://go.dev/blog/error-handling-and-go), [Errors in Go 1.13](https://go.dev/blog/go1.13-errors).
+  - Статья Dave Cheney "Don't just check errors, handle them gracefully".
+- 💻 **Практика:**
+  - Создать кастомную ошибку с дополнительным контекстом, обработать через `errors.As`.
+  - Обернуть ошибку через `fmt.Errorf("... %w", err)`.
+  - Реализовать `errors.Is` для своего типа.
+- ✅ **Чек:**
+  - Чем `errors.Is` отличается от `errors.As`?
+  - Зачем sentinel errors (`io.EOF`)?
+  - Когда panic уместен?
+- ⚠️ **Красный флаг:** `if err != nil { return err }` без контекста — потеря трассы.
+
+## Урок 1.8. Пакеты, имена, организация кода
+
+- 🎯 **Цель:** правильно разбивать код на пакеты, именовать идентификаторы по Go-стилю, понимать internal/.
+- 📚 **Теория:**
+  - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
+  - [Go Style Guide (Google)](https://google.github.io/styleguide/go/).
+  - Статья Dave Cheney "Practical Go: Real world advice for writing maintainable Go programs".
+- 💻 **Практика:**
+  - Разбить проект `gotodo` (из модуля 0) на пакеты `cmd/`, `internal/storage`, `internal/task`.
+  - Прогнать `go vet`, `staticcheck`, починить замечания.
+- ✅ **Чек:**
+  - Что такое `internal/` и зачем?
+  - Почему `util` и `helpers` — плохие имена пакетов?
+  - Когда оправдан `init()`?
+- ⚠️ **Красный флаг:** пакет на 5000 строк "common" или "utils".
+
+---
+
+## 🎯 Проект модуля
+
+**`gowiki` — статический генератор сайтов на Go.**
+
+Критерии приёмки:
+- Читает Markdown-файлы из директории, генерирует HTML.
+- Поддержка front matter (YAML/TOML) для метаданных.
+- Шаблоны через `html/template`.
+- CLI с подкомандами: `build`, `serve`, `new`.
+- Конфиг через YAML.
+- Минимум 80% покрытие тестами для core-логики.
+- Структура проекта по Go-конвенциям (cmd/, internal/, pkg/).
+- README с примерами.
+
+---
+
+## 🏁 Чек-пойнт модуля
+
+- [ ] Знаю все базовые типы и zero values наизусть.
+- [ ] Не путаю value и pointer receiver.
+- [ ] Понимаю mental model слайса (ptr/len/cap).
+- [ ] Идиоматично обрабатываю ошибки через wrap/`Is`/`As`.
+- [ ] Использую functional options.
+- [ ] Разбиваю код на пакеты по domain'у, а не по типам.
+- [ ] Прохожу `go vet` и `staticcheck` без замечаний.
+
+---
+
+## 📎 Дополнительные ресурсы
+
+- 📖 [The Go Programming Language (TGPL)](https://www.gopl.io/) — Donovan & Kernighan.
+- 📖 [100 Go Mistakes and How to Avoid Them](https://100go.co/) — Teiva Harsanyi.
+- 🎥 [Ultimate Go (Ardan Labs)](https://www.ardanlabs.com/training/ultimate-go/) — Bill Kennedy.
+- 📚 [Practical Go](https://dave.cheney.net/practical-go) — Dave Cheney.
+- 📚 [Go Style Guide](https://google.github.io/styleguide/go/) — Google.
+
+---
+
+[← Модуль 0. Фундамент](./00-fundamentals.md) | [📚 К содержанию](../README.md) | [Модуль 2. Глубокий Go →](./02-deep-go.md)
 # Модуль 1. Синтаксис и основы Go 🟢
 
 **Срок:** 3–4 недели  
