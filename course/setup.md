@@ -631,17 +631,334 @@ issues:
 
 ---
 
-## 🔥 Чек-лист «среда настроена»
+## 🪟 Шаг 1.6 — Windows и PowerShell (если без WSL)
+
+Если совсем не получается перейти на WSL2 — вот минимальная корректная настройка под нативный Windows.
+
+### Установка через winget или Chocolatey
+
+```powershell
+# winget (встроен в Windows 10/11)
+winget install --id GoLang.Go --source winget
+
+# или Chocolatey
+choco install golang -y
+```
+
+### Переменные окружения в PowerShell профиле
+
+Откройте файл профиля: `notepad $PROFILE` (если файла нет — `New-Item -Type File -Force $PROFILE`).
+
+```powershell
+# Go
+$env:GOPATH = "$HOME\go"
+$env:GOBIN  = "$env:GOPATH\bin"
+$env:Path  += ";C:\Program Files\Go\bin;$env:GOBIN"
+$env:GOFLAGS = "-mod=readonly"
+$env:GOTOOLCHAIN = "auto"
+```
+
+После правки — `. $PROFILE` или перезапустите PowerShell.
+
+### Сделать line endings LF (важно!)
+
+```powershell
+git config --global core.autocrlf input
+git config --global core.eol lf
+```
+
+И добавьте `.gitattributes` в каждый репозиторий:
+
+```
+* text=auto eol=lf
+*.go text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+```
+
+Без этого Go-тесты, шелл-скрипты и Docker-сборки будут падать с криптовыми ошибками вида `/bin/sh^M: bad interpreter`.
+
+### Почему всё-таки WSL2
+
+99% open-source Go-инструментов разрабатываются на Unix. Symlinks, регистрозависимые пути, POSIX-сигналы, `exec`-семантика — всё это в Windows работает иначе. На WSL2 + Ubuntu 22.04 у вас будет та же среда, что у CI и у проды. Команда `wsl --install` ставит всё за 10 минут. Серьёзно подумайте.
+
+---
+
+## 🌐 Шаг 2.4 — приватные модули, прокси и работа из РФ
+
+### Приватные модули (`GOPRIVATE`, `GONOSUMCHECK`, `GONOPROXY`)
+
+Если вы тащите модули из внутреннего GitLab / GitHub Enterprise / Bitbucket, прокси и checksum-сервер их не знают и не должны знать. Скажите Go явно:
+
+```bash
+# любые модули с этих хостов — приватные
+go env -w GOPRIVATE='*.corp.example.com,github.com/mycompany/*'
+
+# те же модули — мимо прокси и без проверки в sumdb
+go env -w GONOPROXY='*.corp.example.com,github.com/mycompany/*'
+go env -w GONOSUMCHECK='*.corp.example.com,github.com/mycompany/*'
+```
+
+Аутентификация в приватный git — через `~/.netrc` или ssh-конфиг:
+
+```bash
+# заставить Go тянуть github через ssh, а не https
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+```
+
+### Прокси-серверы Go-модулей
+
+Дефолт — `https://proxy.golang.org` (Google). Если из вашей сети он медленный или недоступен:
+
+| Прокси | Когда брать |
+|--------|-------------|
+| `https://proxy.golang.org,direct` | дефолт, мировой |
+| `https://goproxy.cn,direct` | Китай и часто РФ — стабильно и быстро |
+| `https://goproxy.io,direct` | альтернатива |
+| Свой [Athens](https://docs.gomods.io/) | внутри компании, кэширует модули локально |
+| `off` | полный оффлайн, только `vendor/` |
+
+```bash
+go env -w GOPROXY='https://goproxy.cn,https://proxy.golang.org,direct'
+```
+
+Список читается слева направо — Go попробует второй прокси, если первый не отдал модуль.
+
+### Оффлайн-режим
+
+Если в команде / на сборочном сервере вообще нет интернета:
+
+```bash
+go mod vendor                  # выкачать все зависимости в ./vendor
+go build -mod=vendor ./...     # сборка только из vendor, без сети
+```
+
+В CI это даёт воспроизводимые билды и независимость от падения проксей.
+
+---
+
+## 🧪 Шаг 5.4 — что должно работать в IDE: расширенный чек-лист
+
+| Возможность | Как проверить | Что чинить |
+|------------|---------------|------------|
+| Autocomplete | Напишите `fmt.` → должна выпасть подсказка | `go install ...gopls@latest`, рестарт IDE |
+| Hover-документация | Наведите курсор на `fmt.Println` | gopls не запущен / устарел |
+| Go to Definition (F12) | F12 на `Println` → откроется исходник stdlib | проверить `GOROOT` |
+| Find References | Shift+F12 на функции | gopls тормозит — рестарт |
+| Rename (F2) | Переименуйте функцию — поменяется во всех файлах | gopls |
+| Inlay hints | `x := 42` → справа `int` | включить в gopls settings |
+| Auto-import | Напишите `http.Get` → `net/http` добавляется сам | `goimports` или `gopls` |
+| Format on save | Сохраните файл — переформатируется | `go.formatTool` |
+| Lint on save | Сохраните файл с `_ = err` — подсветится | `golangci-lint` |
+| Run test (lens) | Над `TestXxx` появится «run test» | расширение Go |
+| Debug test (lens) | Над `TestXxx` есть «debug test» | `dlv` установлен |
+| Coverage gutter | После `go test -cover` — зелёные/красные полоски | `go.coverOnSave` |
+| Test Explorer | Дерево тестов в боковой панели | плагин Go |
+
+Если хотя бы 8 из 13 пунктов работают — среда настроена «хорошо». Все 13 — «отлично».
+
+---
+
+## 🚀 Шаг 8 — продуктивные мелочи, которые отличают сеньора
+
+### 8.1 `go.mod` и `go.sum` — что это и как их читать
+
+`go.mod` — манифест модуля. Минимум:
+
+```
+module github.com/me/myproj
+
+go 1.23.4               // минимальная версия Go (с 1.21+ — toolchain hint)
+
+require (
+    github.com/jackc/pgx/v5 v5.7.1
+    github.com/stretchr/testify v1.9.0
+)
+
+require (                // косвенные зависимости (//indirect)
+    github.com/davecgh/go-spew v1.1.1 // indirect
+)
+```
+
+Полезные команды:
+
+```bash
+go mod tidy        # синхронизировать go.mod с реальными импортами (обязательно перед коммитом)
+go mod why pkg     # зачем модуль pkg в зависимостях
+go mod graph       # граф зависимостей (плоский текст)
+go mod download    # выкачать всё в кэш, без сборки
+go list -m -u all  # какие зависимости можно обновить
+go get -u ./...    # обновить минорные/патчи (НЕ мажорные)
+go get pkg@v1.2.3  # зафиксировать конкретную версию
+```
+
+`go.sum` — checksums всех модулей и их go.mod. Коммитьте в Git, **никогда не редактируйте руками**.
+
+### 8.2 Локальный `replace` — отлаживаем зависимость
+
+Нужно одновременно работать над приложением и его библиотекой:
+
+```
+// go.mod приложения
+replace github.com/me/mylib => ../mylib
+```
+
+Теперь `go build` берёт `mylib` с диска, а не из прокси. **Не пушьте такие replace в `main`** — это убьёт сборку у коллег. Альтернатива — `go work` (workspaces, 1.18+):
+
+```bash
+go work init ./app ./mylib    # создаёт go.work рядом
+```
+
+`go.work` принципиально личный (в `.gitignore` или коммитьте только в монорепо).
+
+### 8.3 Кросс-компиляция: один Go — много платформ
+
+```bash
+GOOS=linux   GOARCH=amd64 go build -o bin/app-linux-amd64 ./cmd/app
+GOOS=linux   GOARCH=arm64 go build -o bin/app-linux-arm64 ./cmd/app
+GOOS=darwin  GOARCH=arm64 go build -o bin/app-darwin-arm64 ./cmd/app
+GOOS=windows GOARCH=amd64 go build -o bin/app-windows-amd64.exe ./cmd/app
+```
+
+Полный список: `go tool dist list`. С `CGO_ENABLED=0` бинарь статический и работает на любой версии libc.
+
+### 8.4 Race detector — must-use в тестах
+
+```bash
+go test -race ./...        # ловит data races
+go run -race ./cmd/app     # запуск с гонкой
+```
+
+Замедляет код в 2–10 раз, поэтому в проде не нужен. В тестах — **всегда**. Включите в `Taskfile.yml`, в pre-commit hook и в CI.
+
+### 8.5 Профайлинг через `pprof`
+
+В коде:
+
+```go
+import _ "net/http/pprof"
+
+go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
+```
+
+Снять профили:
+
+```bash
+go tool pprof -http=:8080 http://localhost:6060/debug/pprof/profile?seconds=30   # CPU
+go tool pprof -http=:8080 http://localhost:6060/debug/pprof/heap                 # heap
+go tool pprof -http=:8080 http://localhost:6060/debug/pprof/goroutine            # goroutines
+```
+
+В IDE: VS Code расширение Go умеет показывать pprof-flamegraph прямо в редакторе.
+
+### 8.6 Hot-reload в dev — `air`
+
+Чтобы не пересобирать руками при каждом изменении:
+
+```bash
+go install github.com/air-verse/air@latest
+
+# в корне проекта
+air init        # создаст .air.toml
+air             # запуск с автоперезапуском
+```
+
+Альтернативы: `reflex`, `watchexec`. Для микросервисов с `docker compose` — `docker compose watch` (новый, 2.22+).
+
+### 8.7 Безопасность среды разработчика
+
+- **`gitleaks`** в pre-commit: ловит `AWS_SECRET`, токены, приватные ключи **до** коммита.
+- **`govulncheck ./...`** в CI: показывает только реально достижимый код с CVE (не весь `go.sum`).
+- **`gosec ./...`**: SQL-injection, weak crypto, hardcoded creds.
+- Не храните токены в `.env`, который случайно попадёт в Docker-образ. Используйте 1Password CLI / direnv + sops / Doppler.
+- В `~/.netrc` для приватных gitов — `chmod 600`.
+- Не запускайте `go install` от `sudo`. Никогда.
+
+### 8.8 Полезные алиасы и сниппеты
+
+В `~/.zshrc` / `~/.bashrc`:
+
+```bash
+alias gt='go test -race -count=1 ./...'
+alias gtc='go test -race -coverprofile=coverage.out ./... && go tool cover -html=coverage.out'
+alias gl='golangci-lint run'
+alias gm='go mod tidy && go mod verify'
+alias gv='govulncheck ./...'
+alias gr='go run .'
+```
+
+Эти 6 алиасов экономят часы в неделю.
+
+### 8.9 Темплейт пустого проекта за 30 секунд
+
+```bash
+mkdir myapp && cd myapp
+go mod init github.com/me/myapp
+mkdir -p cmd/myapp internal pkg
+cat > cmd/myapp/main.go <<'EOF'
+package main
+
+func main() {}
+EOF
+
+# заготовки
+curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/master/.golangci.example.yml -o .golangci.yml
+git init && git add . && git commit -m "chore: bootstrap"
+```
+
+Через 30 секунд у вас зелёный проект с правильной структурой.
+
+---
+
+## 🩺 Шаг 9 — диагностика «когда что-то сломалось»
+
+Универсальный порядок действий, если IDE/Go ведёт себя странно:
+
+1. **Проверить версию.** `go version`. Совпадает с `go.mod`?
+2. **Очистить кэши.**
+   ```bash
+   go clean -cache -testcache -modcache
+   ```
+   ⚠️ `-modcache` сотрёт ~/go/pkg/mod, при следующем билде Go качнёт всё заново. Долго, но часто лечит «непонятные» проблемы.
+3. **Рестарт gopls.** В VS Code: `Cmd+Shift+P → Go: Restart Language Server`. В Neovim: `:LspRestart`.
+4. **Проверить `go env`.** Особенно `GOROOT`, `GOPATH`, `GOPROXY`, `GOPRIVATE`.
+5. **`go mod tidy && go mod verify`** — синхронизация и проверка целостности.
+6. **`golangci-lint cache clean`** — линтер тоже умеет кэшировать ошибки.
+7. **Посмотреть логи gopls.** В VS Code: `Output → Go`. В Neovim: `:LspLog`.
+8. **Реинсталлировать тулзы.** `Cmd+Shift+P → Go: Install/Update Tools → All`.
+9. **Перезапустить IDE целиком.** Звучит глупо, но `gopls` иногда зависает после смены ветки.
+10. **Создать чистый `hello world`** в новой папке. Работает? → проблема в проекте. Не работает? → проблема в среде.
+
+Этот список покрывает 95% случаев «у меня всё сломалось».
+
+---
+
+## 🔥 Чек-лист «среда настроена» (расширенный)
+
+Базовый уровень:
 
 - [ ] `go version` показывает 1.23.x или выше.
-- [ ] `go env GOPATH`, `GOBIN`, `GOROOT` — все корректные пути, `$GOBIN` в `PATH`.
+- [ ] `go env GOPATH`, `GOBIN`, `GOROOT`, `GOPROXY`, `GOTOOLCHAIN` — все корректные.
+- [ ] `$GOBIN` в `PATH` — `which gopls` и `which dlv` отвечают пути.
 - [ ] IDE подсвечивает синтаксис, делает autocomplete и go-to-definition.
-- [ ] `gopls`, `dlv`, `golangci-lint`, `gofumpt`, `goimports`, `govulncheck` установлены и доступны из терминала.
+- [ ] `gopls`, `dlv`, `golangci-lint`, `gofumpt`, `goimports`, `govulncheck` установлены.
 - [ ] Format on save работает (через `gofumpt`), импорты сами добавляются.
 - [ ] `golangci-lint run` отрабатывает на пустом проекте без ошибок.
-- [ ] Breakpoint в тесте останавливает Delve, переменные видны.
+- [ ] Breakpoint в тесте останавливает Delve, видны переменные и стек.
 - [ ] `go test -race -v ./...` зелёный.
-- [ ] Есть `.editorconfig`, `.golangci.yml`, `Taskfile.yml` в шаблоне.
-- [ ] Есть `.devcontainer/devcontainer.json` — среда воспроизводится одним кликом.
 
-Когда все пункты ✅ — переходите к модулю 00. Дальше будет только код.
+Продвинутый уровень:
+
+- [ ] Понимаю разницу между `GOROOT`, `GOPATH`, `GOBIN`, `GOMODCACHE`.
+- [ ] Настроен `GOPRIVATE` для приватных модулей (если есть).
+- [ ] Знаю, как сменить `GOPROXY` на `goproxy.cn` или Athens.
+- [ ] Умею собирать кросс-платформенно (`GOOS`/`GOARCH`).
+- [ ] Запускал `go tool pprof` хотя бы один раз на своём коде.
+- [ ] Hot-reload через `air` или эквивалент настроен.
+- [ ] `gitleaks` стоит в pre-commit, токены не утекают.
+- [ ] `go.work` понимаю на уровне «зачем нужен в монорепо».
+- [ ] Есть `.editorconfig`, `.golangci.yml`, `Taskfile.yml` в шаблоне проекта.
+- [ ] Есть `.devcontainer/devcontainer.json` — среда воспроизводится одним кликом.
+- [ ] Знаю порядок диагностики из «Шаг 9», когда среда внезапно ломается.
+
+Когда **все базовые** ✅ — можно идти в модуль 00. Когда **все продвинутые** тоже ✅ — вы настраиваете среду лучше большинства Middle-инженеров.
