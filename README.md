@@ -622,3 +622,531 @@ MIT — используй, форкай, улучшай.
 ---
 
 ⭐ Если roadmap помог — поставь звезду, это мотивирует развивать курс.
+
+---
+
+## 🧠 Продвинутые вопросы по Go — с кодом и разбором
+
+Этот раздел — сборник каверзных вопросов, которые задают на Middle/Senior-собеседованиях. Каждый вопрос содержит код, разбор поведения и объяснение «почем».
+
+---
+
+### 1. Что выведет эта программа? (goroutine + closure)
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            fmt.Println(i)
+        }()
+    }
+    wg.Wait()
+}
+```
+
+**Разбор:** Программа скорее всего выведет `5 5 5 5 5` (Go ≤ 1.21). Все горутины захватывают одну и ту же переменную `i` по ссылке (closure). К моменту запуска цикл уже завершился и `i == 5`.
+
+**Правильный вариант:**
+
+```go
+for i := 0; i < 5; i++ {
+    wg.Add(1)
+    i := i // shadowing: новая переменная в каждой итерации
+    go func() {
+        defer wg.Done()
+        fmt.Println(i)
+    }()
+}
+// Или: передавать значение аргументом:
+go func(n int) {
+    defer wg.Done()
+    fmt.Println(n)
+}(i)
+```
+
+> Начиная с Go 1.22 переменная цикла создаётся заново на каждой итерации автоматически, поэтому исходный код начнёт выводить 0..4 правильно.
+
+---
+
+### 2. Есть ли гонка данных? (map + goroutines)
+
+```go
+package main
+
+import "sync"
+
+func main() {
+    m := make(map[string]int)
+    var wg sync.WaitGroup
+    for i := 0; i < 100; i++ {
+        wg.Add(1)
+        go func(n int) {
+            defer wg.Done()
+            m["key"] = n // ← здесь
+        }(i)
+    }
+    wg.Wait()
+}
+```
+
+**Разбор:** Да, **гонка данных**. Map в Go не потокобезопасен. Одновременная запись ведёт к panics в runtime (начиная с Go 1.6). Запуск с `-race` детектирует это немедленно.
+
+**Правильный вариант:**
+
+```go
+var mu sync.Mutex
+// ...
+go func(n int) {
+    defer wg.Done()
+    mu.Lock()
+    m["key"] = n
+    mu.Unlock()
+}(i)
+
+// Или использовать sync.Map для частого конкурентного доступа:
+var sm sync.Map
+sm.Store("key", n)
+```
+
+---
+
+### 3. Что выведет программа? (defer + named return)
+
+```go
+package main
+
+import "fmt"
+
+func f() (result int) {
+    defer func() {
+        result++
+    }()
+    return 0
+}
+
+func main() {
+    fmt.Println(f()) // ?
+}
+```
+
+**Разбор:** Выведет `1`. Как это работает:
+1. `return 0` присваивает `result = 0`
+2. Дефер выполняется: `result++` → `result = 1`
+3. Функция возвращает `1`
+
+Практическое применение — обёртывание ошибки с контекстом:
+
+```go
+func dbQuery(ctx context.Context) (err error) {
+    defer func() {
+        if err != nil {
+            err = fmt.Errorf("dbQuery: %w", err)
+        }
+    }()
+    return someOperation()
+}
+```
+
+---
+
+### 4. Утечка горутины — найдите проблему
+
+```go
+func fetchData(url string) (string, error) {
+    ch := make(chan string)
+    go func() {
+        resp, err := http.Get(url)
+        if err != nil {
+            return
+        }
+        defer resp.Body.Close()
+        body, _ := io.ReadAll(resp.Body)
+        ch <- string(body)
+    }()
+
+    select {
+    case data := <-ch:
+        return data, nil
+    case <-time.After(1 * time.Second):
+        return "", errors.New("timeout")
+    }
+}
+```
+
+**Разбор:** При таймауте горутина продолжает выполнять `http.Get`, а потом пытается отправить в `ch` — но читателя нет, unbuffered канал, горутина **зависает навсегда**.
+
+**Правильный вариант:**
+
+```go
+func fetchData(ctx context.Context, url string) (string, error) {
+    ch := make(chan string, 1) // буферизованный канал
+    go func() {
+        req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+        if err != nil {
+            return
+        }
+        resp, err := http.DefaultClient.Do(req)
+        if err != nil {
+            return
+        }
+        defer resp.Body.Close()
+        body, _ := io.ReadAll(resp.Body)
+        ch <- string(body)
+    }()
+    select {
+    case data := <-ch:
+        return data, nil
+    case <-ctx.Done():
+        return "", ctx.Err()
+    }
+}
+```
+
+---
+
+### 5. Interface nil trap — почему `err != nil` верно, хотя ошибки нет?
+
+```go
+package main
+
+import "fmt"
+
+type MyError struct{ msg string }
+
+func (e *MyError) Error() string { return e.msg }
+
+func getError(fail bool) error {
+    var err *MyError
+    if fail {
+        err = &MyError{"something failed"}
+    }
+    return err // ← ловушка!
+}
+
+func main() {
+    err := getError(false)
+    if err != nil {
+        fmt.Println("got error:", err) // это выполнится!
+    }
+}
+```
+
+**Разбор:** Интерфейс состоит из двух слов: **(ttype, value)**. `return err` возвращает интерфейс с **(type=`*MyError`, value=nil)** — это **НЕ nil-интерфейс**, потому что type задан.
+
+**Правило:** никогда не возвращайте типизированный nil через интерфейс:
+
+```go
+func getError(fail bool) error {
+    if fail {
+        return &MyError{"something failed"}
+    }
+    return nil // настоящий nil-интерфейс
+}
+```
+
+---
+
+### 6. Что выведет программа? (slice sharing)
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    a := []int{1, 2, 3, 4, 5}
+    b := a[1:3]       // b = [2, 3], len=2, cap=4
+    b = append(b, 99)
+    fmt.Println(a)    // ?
+    fmt.Println(b)    // ?
+}
+```
+
+**Разбор:**
+- `a`: `[1 2 3 99 5]` — **сюрприз!**
+- `b`: `[2 3 99]`
+
+`b` указывает на тот же underlying array, что и `a`. `append` записал `99` в позицию индекса 3 общего массива, т.к. `cap(b) = 4 > len(b) = 2`.
+
+**Защита через full slice expression:**
+
+```go
+b := a[1:3:3] // len=2, cap=2 — ограничиваем capacity!
+b = append(b, 99)
+fmt.Println(a) // [1 2 3 4 5] — не изменился
+fmt.Println(b) // [2 3 99]
+```
+
+---
+
+### 7. Deadlock — почему программа зависает?
+
+```go
+package main
+
+func main() {
+    ch := make(chan int)
+    ch <- 42 // блокирует навсегда
+}
+```
+
+**Разбор:** `fatal error: all goroutines are asleep - deadlock!`. Небуферизованный канал блокирует отправителя, пока не появится получатель. Go runtime обнаруживает deadlock, когда все горутины заблокированы.
+
+```go
+// Исправленный вариант 1: буферизованный канал
+ch := make(chan int, 1)
+ch <- 42
+
+// Исправленный вариант 2: отправка в горутине
+ch := make(chan int)
+go func() { ch <- 42 }()
+fmt.Println(<-ch)
+```
+
+---
+
+### 8. Escape analysis — почему переменная уходит в кучу?
+
+```go
+//go:noinline
+func newInt() *int {
+    x := 42
+    return &x // x "убегает" из стека на кучу
+}
+```
+
+**Разбор:** Компилятор проводит **escape analysis**: если переменная используется за пределами функции — она аллокируется на куче.
+
+```bash
+go build -gcflags='-m' .
+# Вывод: ./main.go:5:2: moved to heap: x
+```
+
+Оптимизация — принимать указатель снаружи:
+
+```go
+// Вместо return &Result{...}
+func process(r *Result) { r.fill() } // нет лишней аллокации в hot path
+```
+
+---
+
+### 9. sync.Mutex — value vs pointer receiver
+
+```go
+type Counter struct {
+    mu  sync.Mutex
+    val int
+}
+
+func (c Counter) Inc() { // value receiver!
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.val++
+}
+
+func main() {
+    c := Counter{}
+    c.Inc()
+    c.Inc()
+    fmt.Println(c.val) // ?
+}
+```
+
+**Разбор:** Выведет `0`. Value receiver получает **копию** структуры, включая `sync.Mutex`, что является UB. `go vet` выдаст: `call of c.Inc copies lock value`.
+
+```go
+func (c *Counter) Inc() { // pointer receiver
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.val++
+}
+// Теперь c.val == 2
+```
+
+> Правило: структуры с `sync.Mutex`, `sync.WaitGroup` и др. **всегда** используют pointer receiver и **никогда** не копируются.
+
+---
+
+### 10. Context cancellation — правильный паттерн проверки
+
+```go
+func doWork(ctx context.Context, items []string) error {
+    for _, item := range items {
+        // Неблокирующая проверка контекста ДО работы:
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        default:
+        }
+        if err := process(ctx, item); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
+**Разбор:** Это **правильный паттерн**. `select { case <-ctx.Done(): default: }` — неблокирующая проверка. Проверка идёт ДО `process`, чтобы не начинать работу, если уже отменили.
+
+Лучше всего — передавать `ctx` в `process`, чтобы он сам корректно обрабатывал отмену (например, через `http.NewRequestWithContext`, `db.QueryContext`).
+
+---
+
+### 11. nil-срез вс пустой срез
+
+```go
+var s1 []int = nil
+var s2 []int = []int{}
+
+fmt.Println(s1 == nil) // true
+fmt.Println(s2 == nil) // false
+fmt.Println(len(s1), len(s2)) // 0 0
+```
+
+**Разбор:** Оба среза работают одинаково с `len`, `cap`, `range`, `append`. Разница — в JSON:
+
+```go
+json.Marshal(s1) // → "null"
+json.Marshal(s2) // → "[]"
+```
+
+> Правило: возвращайте `nil` для "нет данных" и `[]T{}` для "пустой список". JSON-клиенты обычно ожидают `[]`, а не `null`.
+
+---
+
+### 12. Worker pool — что не так?
+
+```go
+func processItems(items []string) {
+    jobs := make(chan string)
+
+    for w := 0; w < 5; w++ {
+        go func() {
+            for job := range jobs {
+                process(job)
+            }
+        }()
+    }
+
+    for _, item := range items {
+        jobs <- item
+    }
+    // Без close(jobs) и без WaitGroup!
+}
+```
+
+**Разбор:** Две проблемы:
+1. Без `close(jobs)` воркеры не завершатся (цикл `range jobs` зависает навсегда)
+2. Без `WaitGroup` функция вернётся раньше окончания воркеров
+
+**Правильный вариант:**
+
+```go
+func processItems(items []string) {
+    jobs := make(chan string)
+    var wg sync.WaitGroup
+
+    for w := 0; w < 5; w++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for job := range jobs {
+                process(job)
+            }
+        }()
+    }
+
+    for _, item := range items {
+        jobs <- item
+    }
+    close(jobs) // сигнал — новых заданий не будет
+    wg.Wait()   // ждём завершения всех воркеров
+}
+```
+
+---
+
+### 13. Generics — ограничения типов (Go 1.18+)
+
+```go
+// Не скомпилируется: operator + not defined on T
+func Sum[T any](nums []T) T {
+    var total T
+    for _, n := range nums { total += n }
+    return total
+}
+
+// Правильно: constraint с тильдой (~)
+type Number interface {
+    ~int | ~int32 | ~int64 | ~float32 | ~float64
+}
+
+func Sum[T Number](nums []T) T {
+    var total T
+    for _, n := range nums { total += n }
+    return total
+}
+```
+
+**Разбор:** Тильда `~int` означает «все типы, у которых underlying type — int». Поэтому подходят кастомные типы:
+
+```go
+type Celsius float64
+fmt.Println(Sum([]Celsius{36.6, 37.0})) // работает!
+```
+
+---
+
+### 14. Go Memory Model — happens-before
+
+```go
+var x int
+var done bool
+
+func setup() {
+    x = 42
+    done = true
+}
+
+func main() {
+    go setup()
+    for !done {}
+    fmt.Println(x) // Гарантировано ли 42?
+}
+```
+
+**Разбор:** **НЕТ гарантии**. Без синхронизации компилятор и CPU могут переупорядочить операции. Race detector покажет data race.
+
+**Идиоматичный вариант:**
+
+```go
+done := make(chan struct{})
+go func() {
+    x = 42
+    close(done) // happens-before receive
+}()
+<-done
+fmt.Println(x) // гарантированно 42
+
+// Или через atomic:
+var x atomic.Int64
+var done atomic.Bool
+go func() { x.Store(42); done.Store(true) }()
+for !done.Load() {}
+fmt.Println(x.Load())
+```
+
+> Go Memory Model гарантирует happens-before только для явных точек синхронизации: канал, `sync.Mutex`, `sync/atomic`.
+
+---
